@@ -12,6 +12,7 @@
     - [Defect Dojo (API v2)](#defect-dojo-api-v2)
     - [MalwareDB & Maltrail](#malwaredb--maltrail)
   - [Instalación](#instalación)
+  - [Consideraciones para Desarrollo en Windows](#consideraciones-para-desarrollo-en-windows)
   - [API v1](#api-v1)
     - [Uso](#uso)
     - [Swagger](#swagger)
@@ -162,6 +163,79 @@ Para detener y eliminar los contenedores, ejecuta:
 ```sh
 docker-compose down
 ```
+
+### Consideraciones para Desarrollo en Windows
+
+Si estás desarrollando en Windows, es necesario realizar algunas modificaciones en el `Dockerfile` y la configuración para manejar correctamente los scripts de entrada (`entrypoint`) y los hosts permitidos:
+
+#### 1. Manejo de finales de línea
+
+Esto se debe a las diferencias en cómo Windows y Unix/Linux manejan los finales de línea:
+
+1. Instalar `dos2unix` en el Dockerfile:
+```dockerfile
+RUN apt-get update && \
+    apt-get install -y dos2unix
+```
+
+2. Convertir los scripts de entrada a formato Unix:
+```dockerfile
+COPY entrypoint/web_entrypoint.sh /web_entrypoint.sh
+COPY entrypoint/worker_entrypoint.sh /worker_entrypoint.sh
+
+RUN chmod +x /web_entrypoint.sh /worker_entrypoint.sh && \
+    dos2unix /web_entrypoint.sh /worker_entrypoint.sh
+```
+
+Estos cambios son necesarios porque:
+- Windows usa finales de línea CRLF (\r\n)
+- Unix/Linux usa finales de línea LF (\n)
+- Los scripts shell en contenedores Linux requieren finales de línea Unix (LF)
+
+#### 2. Configuración de Hosts y CSRF
+
+Para manejar correctamente las peticiones en desarrollo local, necesitas configurar los hosts permitidos y la protección CSRF:
+
+1. En el archivo `.env`:
+```env
+# Configuración de hosts permitidos
+DJANGO_ALLOWED_HOSTS=*
+CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1,http://web,http://app,http://localhost:8888,http://0.0.0.0
+
+# Modo desarrollo
+ENV=DEV
+```
+
+2. En el archivo `nginx/app.conf`:
+```nginx
+location / {
+    proxy_connect_timeout 500;
+    proxy_read_timeout 500;
+    proxy_send_timeout 500;
+    proxy_pass http://web/;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+listen 8888;
+server_name localhost;
+```
+
+Esta configuración es necesaria para:
+- Permitir peticiones desde localhost y otros hosts de desarrollo
+- Manejar correctamente las cabeceras de proxy
+- Configurar la protección CSRF adecuadamente
+- Evitar errores de "DisallowedHost" y "CSRF verification failed"
+
+Sin estas modificaciones, podrías encontrar errores como:
+- "no such file or directory"
+- "bad interpreter"
+- "Invalid HTTP_HOST header"
+- "CSRF verification failed"
+- Problemas al ejecutar los scripts de entrada
 
 ### API v1
 

@@ -198,12 +198,27 @@ def create_scan(request, app_id = ''):
 @login_required
 def delete_scan(request, scan_id=''):
     if request.method == 'POST':
-        scan = Scan.objects.get(pk=scan_id)
-        if (scan.user == request.user):
-            scan.delete()
-            messages.success(request, 'Removed successfully')
-            return redirect('home')
-    messages.warning(request, 'Removed successfully')
+        try:
+            scan = Scan.objects.get(pk=scan_id)
+            if scan.user == request.user:
+                # Eliminar todas las relaciones primero
+                Finding.objects.filter(scan=scan).delete()
+                Certificate.objects.filter(scan=scan).delete()
+                Permission.objects.filter(scan=scan).delete()
+                Activity.objects.filter(scan=scan).delete()
+                Component.objects.filter(scan=scan).delete()
+                String.objects.filter(scan=scan).delete()
+                DatabaseInfo.objects.filter(scan=scan).delete()
+                File.objects.filter(scan=scan).delete()
+                VirusTotalScan.objects.filter(scan=scan).delete()
+                
+                # Finalmente eliminar el escaneo
+                scan.delete()
+                messages.success(request, 'Eliminado exitosamente')
+                return redirect('home')
+        except Exception as e:
+            logger.error(f"Error al eliminar el escaneo: {e}")
+            messages.error(request, 'Error al eliminar el escaneo')
     return redirect('home')
 
 @login_required

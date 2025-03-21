@@ -3,7 +3,7 @@ services:
   db:
     image: postgres:16-bullseye@sha256:7174d2a352ad138906e3dc4a28a5d11b5a158180e9bff80beed8c8cc346f874c
     env_file:
-      - ./.env.example
+      - ./.env
     environment:
       POSTGRES_DB: ${SQL_DATABASE:-audit}
       POSTGRES_USER: ${SQL_USER:-postgres}
@@ -18,7 +18,7 @@ services:
       context: ./
     image: mobile_audit
     env_file:
-      - ./.env.example
+      - ./.env
     entrypoint: [ '/web_entrypoint.sh' ]
     volumes:
       - .:/app
@@ -41,7 +41,7 @@ services:
   rabbitmq:
     image: rabbitmq:3.13.0-management@sha256:ba406c7daaef53b59c92a13db37a27d0425579a40c59266d10022a40a8ba7242
     env_file:
-      - ./.env.example
+      - ./.env
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
@@ -55,7 +55,7 @@ services:
   worker:
     image: mobile_audit
     env_file:
-      - ./.env.example
+      - ./.env
     entrypoint: [ '/worker_entrypoint.sh' ]
     volumes:
       - .:/app

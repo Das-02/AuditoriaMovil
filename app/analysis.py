@@ -49,77 +49,105 @@ def analyze_apk(task, scan_id):
         scan = Scan.objects.get(pk=scan_id)
         APK_PATH = settings.BASE_DIR + scan.apk.url
         DECOMPILE_PATH = os.path.splitext(APK_PATH)[0]
+        
+        logger.info(f"Starting analysis for scan {scan_id}")
         scan.status = 'In Progress'
         scan.progress = 3
         scan.save()
         task.update_state(state = 'STARTED',
                 meta = {'current': scan.progress, 'total': 100, 'status': scan.status})
-        logger.debug(scan.status)
+        
+        # Analyze APK
+        logger.info("Loading APK file...")
         a = APK(APK_PATH)
         scan = set_hash_app(scan)
+        
+        # Get APK info
+        logger.info("Getting APK information...")
         scan.status = 'Getting info of apk'
         scan.progress = 5
         scan.save()
         task.update_state(state = 'STARTED',
                 meta = {'current': scan.progress, 'total': 100, 'status': scan.status})
-        logger.debug(scan.status)
         scan = get_info_apk(a, scan)
+        
+        # Get certificate info
+        logger.info("Getting certificate information...")
         scan.status = 'Getting info of certificates'
         scan.progress = 10
         scan.save()
         task.update_state(state = 'STARTED',
                 meta = {'current': scan.progress, 'total': 100, 'status': scan.status})
-        logger.debug(scan.status)
         get_info_certificate(a, scan)
+        
+        # VirusTotal check
         if (settings.VIRUSTOTAL_ENABLED):
+            logger.info("Checking VirusTotal...")
             scan.status = 'Getting info of VT'
             scan.progress = 15
             scan.save()
             task.update_state(state = 'STARTED',
                 meta = {'current': scan.progress, 'total': 100, 'status': scan.status})
-            logger.debug(scan.status)
             report = get_report_virus_total(scan, scan.sha256)
             if (not report and settings.VIRUSTOTAL_UPLOAD):
                 scan.status = 'Upload to VT'
                 scan.save()
                 upload_virus_total(scan, APK_PATH, scan.sha256)
+        
+        # Decompile APK
+        logger.info("Decompiling APK...")
         scan.status = 'Decompiling'
         scan.progress = 20
         scan.save()
         task.update_state(state = 'STARTED',
                 meta = {'current': scan.progress, 'total': 100, 'status': scan.status})
-        logger.debug(scan.status)
-        decompile_jadx()
+        
+        decompile_result = decompile_jadx()
+        if not decompile_result:
+            raise Exception("Failed to decompile APK")
+            
         if (a.get_app_icon()):
             update_icon(scan, DECOMPILE_PATH + '/resources/' + a.get_app_icon())
+        
+        # Find vulnerabilities
+        logger.info("Starting vulnerability analysis...")
         scan.status = 'Finding vulnerabilities'
         scan.progress = 40
         task.update_state(state = 'STARTED',
                 meta = {'current': scan.progress, 'total': 100, 'status': scan.status})
         scan.save()
-        logger.debug(scan.status)
+        
         get_tree_dir(scan)
+        
+        # Final steps
+        logger.info("Finalizing analysis...")
         scan.status = 'Finished'
         scan.progress = 100
         scan.finished_on = datetime.now()
         scan.save()
         task.update_state(state = 'STARTED',
                 meta = {'current': scan.progress, 'total': 100, 'status': scan.status})
-        logger.debug(scan.status)
+        
     except Exception as e:
+        logger.error(f"Critical error during scan: {e}")
         scan.progress = 100
-        scan.status = "Error"
+        scan.status = f"Error: {str(e)[:200]}"
         scan.finished_on = datetime.now()
         scan.save()
         task.update_state(state = 'STARTED',
                 meta = {'current': scan.progress, 'total': 100, 'status': scan.status})
-        logger.error(e)
 
 def decompile_jadx():
     if (not os.path.isdir(DECOMPILE_PATH)):
-        #execute jadx command
-        os.system('jadx -d {} {}'.format(DECOMPILE_PATH, APK_PATH))
-    # now we have sources/resources decompiled
+        logger.info(f"Decompiling APK to {DECOMPILE_PATH}")
+        result = os.system('jadx -d {} {}'.format(DECOMPILE_PATH, APK_PATH))
+        if result != 0:
+            logger.error(f"JADX failed with exit code: {result}")
+            return False
+        return True
+    else:
+        logger.info("Using existing decompiled files")
+        return True
 
 def update_icon(scan, path):
     encoded_string = ''
@@ -221,27 +249,60 @@ def get_info_certificate(a, scan):
 
 def get_tree_dir(scan):
     dir = DECOMPILE_PATH
-    for dirpath, dirs, files in os.walk(dir): 
+    total_files = 0
+    analyzed_files = 0
+    
+    # Primero contamos el total de archivos a analizar
+    for dirpath, dirs, files in os.walk(dir):
         for filename in files:
             fname = os.path.join(dirpath, filename)
             extension = os.path.splitext(fname)[1]
-            if (extension == '.db' or extension == '.sqlite3' or extension =='.sql'):
-                get_info_database(scan, fname)
-            else:
-                if (extension == '.java' or  extension == '.kt' or extension == '.xml'):
+            if extension in ['.db', '.sqlite3', '.sql', '.java', '.kt', '.xml']:
+                total_files += 1
+    
+    logger.info(f"Total files to analyze: {total_files}")
+    
+    # Ahora analizamos cada archivo
+    for dirpath, dirs, files in os.walk(dir):
+        for filename in files:
+            try:
+                fname = os.path.join(dirpath, filename)
+                extension = os.path.splitext(fname)[1]
+                
+                if extension in ['.db', '.sqlite3', '.sql']:
+                    logger.info(f"Analyzing database file: {filename}")
+                    get_info_database(scan, fname)
+                    analyzed_files += 1
+                elif extension in ['.java', '.kt', '.xml']:
+                    logger.info(f"Analyzing code file: {filename}")
                     try:
-                        prev_line = ''
-                        i = 0
-                        f = open(fname, mode="r", encoding="utf-8")
-                        content = f.read()
-                        f.close()
-                        find_patterns(i + 1, prev_line, content, fname, dir, scan)
+                        with open(fname, mode="r", encoding="utf-8") as f:
+                            content = f.read()
+                            find_patterns(1, '', content, fname, dir, scan)
                     except Exception as e:
-                        logger.error('ERROR {} {}'.format(e, fname))
-                    if (filename == 'AndroidManifest.xml'):
+                        logger.error(f'Error analyzing {fname}: {e}')
+                    
+                    if filename == 'AndroidManifest.xml':
                         get_info_file(scan, fname, dir)
+                    analyzed_files += 1
                 else:
                     get_info_file(scan, fname, dir)
+                
+                # Actualizar el progreso
+                if total_files > 0:
+                    progress = int(40 + (analyzed_files / total_files * 55))  # Progreso de 40% a 95%
+                    scan.progress = min(progress, 95)  # No exceder 95%
+                    scan.status = f'Analyzing files ({analyzed_files}/{total_files})'
+                    scan.save()
+                    
+            except Exception as e:
+                logger.error(f'Error processing {filename}: {e}')
+                continue  # Continuar con el siguiente archivo
+    
+    # Asegurarnos de que llegamos al 95% al terminar
+    scan.progress = 95
+    scan.status = 'Analysis completed'
+    scan.save()
 
 def get_position(match):
     span = match.span()

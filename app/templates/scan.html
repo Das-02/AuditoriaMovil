@@ -903,35 +903,50 @@
             fetch(progressUrl).then(function(response) {
                 response.json().then(function(data) {
                     try {
-                        if (data.current == data.total) {
-                            return
+                        // Si el progreso ya está al 100%, no actualizamos nada
+                        if (data.current >= 100) {
+                            return;
                         }
+
+                        // Actualizamos la información del APK si es necesario
                         if (data.current >= 5) {
                             if (['None','', null].indexOf($("#scan-apk-name").text()) != -1) {
-                                updateScanInfo(scan_id)
+                                updateScanInfo(scan_id);
                             }
                         }
-                        // update the progress bar
-                        $("#progress-bar").width(data.current + "%")
-                        $("#progress-bar").text(data.current + "%")
-                        $("#progress-status").text(data.status)
-                        // update permissions
-                        if ($("#permissions tbody tr").length <= 1) {
-                            updatePermissions(scan_id)
+
+                        // Solo actualizamos el progreso si es mayor al actual
+                        var currentProgress = parseInt($("#progress-bar").text());
+                        if (data.current > currentProgress) {
+                            $("#progress-bar").width(data.current + "%");
+                            $("#progress-bar").text(data.current + "%");
+                            $("#progress-status").text(data.status);
+
+                            // Cambiamos el color de la barra cuando está completo
+                            if (data.current >= 100) {
+                                $("#progress-bar").removeClass("bg-primary").addClass("bg-success");
+                            }
                         }
+
+                        // Actualizamos permisos si es necesario
+                        if ($("#permissions tbody tr").length <= 1) {
+                            updatePermissions(scan_id);
+                        }
+
+                        // Ajustamos los intervalos de actualización según el progreso
                         if (data.current < 20) {
                             setTimeout(updateProgress, 3000, progressUrl);
                         } else if (data.current < 40) {
                             setTimeout(updateProgress, 5000, progressUrl);
-                        } else {
+                        } else if (data.current < 100) {
                             setTimeout(updateProgress, 10000, progressUrl);
                         }
                     } catch(e) {
-                        //setTimeout(updateProgress, 5000, progressUrl);
+                        console.error("Error actualizando progreso:", e);
                     }
                 });
             }).catch(function(e) {
-                //setTimeout(updateProgress, 10000, progressUrl);
+                console.error("Error en la petición:", e);
             });
         }
         var progressUrl = '{% url "scan_state" scan.id %}';
