@@ -4,7 +4,7 @@ FROM python:3.10-bullseye@sha256:02c7cb92b8f23908de6457f7800c93b84ed8c6e7201da79
 RUN apt-get update && \
 	apt-get clean && \
 	apt-get install -y ca-certificates-java --no-install-recommends && \
-	apt-get install -y openjdk-11-jdk p11-kit wkhtmltopdf libqt5gui5 dos2unix && \
+	apt-get install -y openjdk-11-jdk p11-kit wkhtmltopdf libqt5gui5 dos2unix netcat-traditional && \
 	apt-get clean && \
 	update-ca-certificates -f
 
@@ -27,9 +27,10 @@ RUN groupadd -g ${gid} ${group} \
 # Copy entrypoints
 COPY entrypoint/web_entrypoint.sh /web_entrypoint.sh
 COPY entrypoint/worker_entrypoint.sh /worker_entrypoint.sh
+COPY entrypoint/init.sh /init.sh
 
-RUN chmod +x /web_entrypoint.sh /worker_entrypoint.sh && \
-    dos2unix /web_entrypoint.sh /worker_entrypoint.sh
+RUN chmod +x /web_entrypoint.sh /worker_entrypoint.sh /init.sh && \
+    dos2unix /web_entrypoint.sh /worker_entrypoint.sh /init.sh
 
 # Create a directory in the container in /app
 RUN mkdir /app
@@ -38,7 +39,6 @@ COPY . /app
 
 # Use /app as the workdir
 WORKDIR /app
-
 
 # Upgrade pip and install python dependencies
 RUN pip install --upgrade pip \
@@ -64,3 +64,6 @@ USER ${uid}
 
 # Expose the 8000 port
 EXPOSE 8000
+
+# Set the entrypoint
+ENTRYPOINT ["/init.sh"]

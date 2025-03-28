@@ -64,7 +64,7 @@ SECRET_KEY = env("SECRET_KEY", "<SECRET_KEY>")
 DEBUG = int(env("DEBUG", 0))
 
 ALLOWED_HOSTS = tuple(env("DJANGO_ALLOWED_HOSTS", ['web','app','localhost','127.0.0.1']))
-CSRF_TRUSTED_ORIGINS=tuple(env("CSRF_TRUSTED_ORIGINS", ['http://web','http://app','http://localhost','http://127.0.0.1']))
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8888']
 
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases

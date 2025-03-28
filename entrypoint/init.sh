@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Esperar a que la base de datos esté lista
 echo "Esperando a que la base de datos esté lista..."
@@ -9,11 +9,12 @@ echo "Base de datos lista!"
 
 # Aplicar migraciones
 echo "Aplicando migraciones..."
-python manage.py makemigrations
 python manage.py migrate
-python manage.py loaddata data
-python manage.py collectstatic --noinput
+
+# Crear superusuario si no existe
+echo "Creando superusuario..."
+python manage.py shell -c "from django.contrib.auth.models import User; User.objects.create_superuser('admin', 'admin@example.com', 'admin') if not User.objects.filter(username='admin').exists() else None"
 
 # Iniciar el servidor
 echo "Iniciando el servidor..."
-uwsgi --http 0.0.0.0:8000 --enable-threads --processes 2 --threads 1 --module app.config.wsgi
+exec "$@" 

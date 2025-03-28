@@ -19,7 +19,7 @@ services:
     image: mobile_audit
     env_file:
       - ./.env
-    entrypoint: [ '/web_entrypoint.sh' ]
+    entrypoint: [ '/init.sh', '/web_entrypoint.sh' ]
     volumes:
       - .:/app
     expose:
