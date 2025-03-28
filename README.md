@@ -299,6 +299,27 @@ Por defecto, hay un volumen en `docker-compose.yml` con la configuración con el
 
 ### Variables de entorno
 
+La aplicación utiliza un archivo `.env` para la configuración del entorno. Este archivo contiene información sensible y no debe subirse a GitHub.
+
+Para configurar el entorno:
+
+1. Copia el archivo `.env.example` a `.env`:
+```bash
+cp .env.example .env
+```
+
+2. El archivo `.env.example` ya contiene las credenciales por defecto para desarrollo local:
+   - Base de datos PostgreSQL: usuario `postgres`, contraseña `postgres`
+   - Base de datos de la aplicación: usuario `mobile_audit`, contraseña `mobile_audit`
+   - RabbitMQ: usuario `guest`, contraseña `guest`
+
+3. Solo necesitas configurar:
+   - `DJANGO_SECRET_KEY`: Genera una clave secreta segura
+   - `VIRUSTOTAL_API_KEY`: Tu clave de API de VirusTotal (opcional)
+   - `DEFECTDOJO_API_KEY`: Tu clave de API de DefectDojo (opcional)
+
+Nota: El archivo `.env` está incluido en `.gitignore` para evitar que se suba al repositorio. Las credenciales por defecto son seguras para desarrollo local ya que están aisladas en contenedores Docker.
+
 Todas las variables de entorno están en un archivo `.env`, hay un `.env.example` con todas las variables necesarias. También están recopiladas en `app/config/settings.py`:
 
 ```python
